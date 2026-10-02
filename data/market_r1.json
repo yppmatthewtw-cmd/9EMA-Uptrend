@@ -1,0 +1,144 @@
+{
+ "as_of": "2026-10-01",
+ "headline": "指數企喺高位、闊度極弱；加息周期中段，長債息 24 年新高、油價 $90 樓上 —— 偏防守，只做高 RS 嘅 9/21EMA 回調",
+ "days": [
+  [
+   "09-29（二）",
+   "標普 −0.16% 至 7,670.84、道指 −0.26% 至 51,349.92、納指 −0.09% 至 26,797.54；長債息再創多年新高，三大指數連跌兩日。（AP、CNBC）"
+  ],
+  [
+   "09-30（三）",
+   "標普 −0.3% 至 7,651.54、道指 −0.9%、納指 +0.2%、羅素 2000 −0.4% 至 2,796.86；大部分股票下跌，第二季 GDP 上修令債息企硬。（AP）"
+  ],
+  [
+   "10-01（四）",
+   "標普 +0.19% 至 7,666.45、納指 +0.04% 至 26,871.60、道指 +0.04% 至 50,926.56；早段跟債息跌，尾段債息由廿多年高位回落、晶片股（Micron 業績）帶動反彈收升。（CNBC、Yahoo Finance、TheStreet）"
+  ]
+ ],
+ "macro": [
+  [
+   "息口（最重要嘅領先指標）",
+   "聯儲 09-16 加息至 3.75%–4.00%（12–0 一致）；主席 Warsh 09-25 重申「通脹太高太耐」，核心 PCE 2026 年每個月都高過 3%。市場價入 10 月再加息機率約 70%、年底前多一至兩次（Bloomberg、Forbes、Schwab）。紐約聯儲 Williams 09-29 話「年底前多一次」—— 比市場價入嘅慢，10 月加息機率略回落。"
+  ],
+  [
+   "長債息",
+   "10 年期美債息 10-01 升至 5.33%（2002 年 4 月以來最高；Yahoo 日線收 5.237%）；09-28 曾達 5.23%（2007 年以來最高）。息口 5% 樓上 = 估值壓力（標普約 22 倍預期市盈率）及小型股／高負債股嘅主要壓力源。"
+  ],
+  [
+   "油價／地緣",
+   "WTI 10-01 收 $92.87（+2.7%；Brent $102.31），日內曾見 $91.5；2 月起美伊衝突、荷莫茲海峽航運反覆、09 月特朗普拒絕伊朗和平方案；油價 $90 樓上令通脹預期難回落，係聯儲繼續加息嘅主因之一。"
+  ],
+  [
+   "美元",
+   "美元指數 10-01 收 102.1（+0.6%，期內新高），跟美息走強；對海外收入比重高嘅大型科技股係逆風，對內需／區域銀行中性。"
+  ],
+  [
+   "波動率",
+   "VIX 10-01 收 16.39（5 日 +4.6%）：指數層面唔驚，但同大市闊度（只有約四分一股票企喺 21EMA 上）嚴重背馳 —— 典型「指數靠幾隻大股撐住」嘅後期結構。"
+  ]
+ ],
+ "regime": [
+  [
+   "宏觀流動性（息口）周期",
+   "加息周期中段：2026-09 加息後市場再價入 10／12 月加息。歷史對標 2004–06、1994 嘅「加息中段」—— 指數橫行偏上但闊度收窄、換手由長期增長股轉去定價能力強／現金流強嘅股票；周期尾聲訊號係 2 年息見頂、曲線由倒掛轉陡。"
+  ],
+  [
+   "政治周期",
+   "2026 中期選舉（11 月）前一個月：歷史上中期選舉年 9–10 月偏弱、選後 12 個月偏強（1950 年起幾乎無例外）；聯儲喺選前加息屬罕見，政治噪音會放大波動。"
+  ],
+  [
+   "技術革命（AI／半導體）",
+   "領導板塊仍係晶片（Micron 業績、AMD、INTC、MTSI、SITM 等喺名單上），但由 2023 年起計已係第三年，資本開支質疑（7 月 Alphabet 跌 7%）開始出現 —— 屬「產業周期中後段」，要求回調到 9/21EMA 先追，唔追突破。"
+  ],
+  [
+   "黑天鵝／地緣",
+   "美伊衝突、荷莫茲、胡塞攻擊油輪：每次升級油價急升 → 債息升 → 股市回調（7-22／8-11／8-31 三次），每次 1–3 星期內修復；下一個升級點係油價 $100 ＋ 10 年息 5.5%。"
+  ]
+ ],
+ "implications": [
+  "指數離高位唔遠（標普 7,666；SPY 離期內高位 −1.8%）但只有 26% 合資格股票喺 21EMA 上、26% 嘅 21EMA 向上 —— 名單入面嘅股票係少數仍然處於上升結構嘅股票，屬「逆闊度」嘅精選，唔係大市普漲。",
+  "倉位：偏細（總倉位 ≤ 正常一半），優先大型／中型股及 RS21 高嘅股票；小型股（市值 <$20 億）只做試探倉，因 5% 以上嘅長債息對佢哋最唔利。",
+  "入場：等股價回到 9EMA／21EMA 兼當日收市守住（收市在當日區間上半部），唔追離 9EMA 3% 以上嘅位置；止蝕放最後一個底之下。",
+  "大市轉強確認訊號（觀察）：合資格股票 >50% 企喺 21EMA 上、20 日新高多過新低、10 年息跌穿 5.0%、油價跌穿 $85；任何一項出現即可加大倉位。",
+  "風險觸發：10 年息 >5.5%、油價 >$100、VIX >22、或聯儲 10-28 會議鷹派加息 —— 出現即減半倉位。"
+ ],
+ "leading": [
+  [
+   "10 年期美債息",
+   "5.24%–5.33%",
+   "跌穿 5.0% 轉利好；升穿 5.5% 轉利淡"
+  ],
+  [
+   "WTI 油價",
+   "$92.9（10-01 收市）",
+   "跌穿 $85 利好；升穿 $100 利淡"
+  ],
+  [
+   "VIX",
+   "16.4（10-01 收市）",
+   "升穿 22 要減倉"
+  ],
+  [
+   "美元指數",
+   "102.1（期內新高）",
+   "升穿 103 對大型科技股不利"
+  ],
+  [
+   "合資格股票企喺 21EMA 上嘅比例",
+   "26%（10-01）",
+   "升穿 50% = 闊度推進（thrust），大市轉強"
+  ],
+  [
+   "20 日新高／新低",
+   "202 / 569（10-01）；09-30 係 106 / 942",
+   "新高多過新低連續 3 日 = 轉強"
+  ],
+  [
+   "聯儲 10-28 會議",
+   "加息機率約 70%",
+   "唔加息 + 鴿派 = 風險偏好回升"
+  ]
+ ],
+ "sources": [
+  [
+   "CNBC — S&P 500 closes higher to start October as Treasury yields retreat",
+   "https://www.cnbc.com/2026/09/30/stock-market-today-live-updates.html"
+  ],
+  [
+   "Yahoo Finance — Stock market today: Thursday Oct 1",
+   "https://finance.yahoo.com/markets/live/stock-market-today-thursday-oct-1-dow-sp-500-nasdaq-080602402.html"
+  ],
+  [
+   "TheStreet — Stock Market Today (Oct. 1, 2026)",
+   "https://www.thestreet.com/stock-market-today/stock-market-today-dow-jones-sp-500-nasdaq-updates-oct-01-2026"
+  ],
+  [
+   "Schwab — Stocks Up on Firm Tech Despite 24-Year Yield Highs",
+   "https://www.schwab.com/learn/story/stock-market-update-open"
+  ],
+  [
+   "SIA Wealth — October Opens with Mixed Markets as Oil and Treasury Yields Climb",
+   "https://www.siawealth.com/2026/10/01/october-opens-with-mixed-markets-as-oil-and-treasury-yields-climb/"
+  ],
+  [
+   "Bloomberg — Fed's Williams Sees One More Interest Rate Hike in Late 2026",
+   "https://bloomberg.com/news/articles/2026-09-29/fed-s-williams-sees-one-more-interest-rate-hike-in-late-2026"
+  ],
+  [
+   "Forbes — Markets Brace For Two More Fed Rate Hikes In 2026",
+   "https://www.forbes.com/sites/simonmoore/2026/09/29/what-to-expect-from-interest-rates-for-the-rest-of-2026/"
+  ],
+  [
+   "CNBC — Warsh's regime change at the Fed pushes ahead",
+   "https://cnbc.com/2026/09/25/kevin-warsh-fed-interest-rates-balance-sheet.html"
+  ],
+  [
+   "Schwab — Fed Hikes in 12-0 Vote, Commits to Inflation Fight",
+   "https://www.schwab.com/learn/story/fomc-meeting"
+  ],
+  [
+   "10MA-watchlist R23 市況頁（09-29／09-30 收市摘要，AP／CNBC）",
+   "https://github.com/yppmatthewtw-cmd/10MA-watchlist"
+  ]
+ ]
+}
