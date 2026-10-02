@@ -28,10 +28,11 @@ BUILT_AT = os.environ.get("BUILT_AT", "")
 
 scr = json.load(open(f"{W}/{SCREEN}"))
 mkt = json.load(open(f"{W}/{MARKET}")) if os.path.exists(f"{W}/{MARKET}") else {}
-rows = scr["rows"]; tier2 = scr["tier2"]; SHEETS = scr["sheets"]
+rows = scr["rows"]; tier2 = scr["tier2"]; tier3 = scr.get("tier3", []); SHEETS = scr["sheets"]
 META = scr["meta"]; LAST = META["last_date"]; P = META["params"]; PL = META["params_loose"]
 WT = META["weights"]; LIN = META["lin"]
-ALL = rows + tier2
+ALL = rows + tier2 + tier3
+T3_FILL = PatternFill("solid", fgColor="FCE4D6")      # third tier: only MACD missing
 
 FONT = "Arial"
 HDR_FILL = PatternFill("solid", fgColor="1F3864")
@@ -61,7 +62,8 @@ SC = '0.0'
 NUM2 = '0.00'
 INT = '#,##0'
 CAPZH = {"a": "大型", "b": "中型", "c": "小型", "x": "未分類"}
-CRIT_ZH = {"C1": "C1 21EMA向上", "C2": "C2 9EMA在21EMA上", "C3": "C3 一底高於一底", "C5": "C4 上升三角／重心偏上"}
+CRIT_ZH = {"C1": "C1 21EMA向上", "C2": "C2 9EMA在21EMA上", "C3": "C3 一底高於一底", "C5": "C4 上升三角／重心偏上",
+           "C6": "C5 MACD慢線向上", "C7": "C6 MACD柱轉勢"}
 SHEET_ZH = {"a": "a 剛黃金交叉", "b": "b 回到21EMA", "c": "c 回到9EMA"}
 
 
@@ -129,6 +131,8 @@ COLS = [
     ("hln", "連續上升底數目", 6), ("hldate", "最後一底日期", 10), ("hllow", "最後一底價", 9), ("hlprev", "上一底價", 9),
     ("hlrise", "底較底升%", 7), ("hlage", "最後一底距今（日）", 7), ("dlow", "距最後一底%", 7),
     ("hi15", "15日最高收市", 9), ("pb", "距15日高%", 7),
+    ("macd", "MACD", 8), ("sig", "MACD慢線", 8), ("sigp", "慢線（前日）", 8), ("sigd", "慢線斜率", 8),
+    ("hist", "柱（今日）", 8), ("histp", "柱（前日）", 8), ("histp2", "柱（前2日）", 8), ("hcol", "柱顏色", 6), ("turn", "柱轉勢", 9), ("tago", "轉勢幾日前", 6), ("hseq", "柱顏色序列（舊→新）", 26),
     ("pat", "形態（25日）", 13), ("slh", "高位斜率（%/日）", 8), ("sll", "低位斜率（%/日）", 8), ("cog", "重心（VWAP在25日高低區間位置）", 9),
     ("cogc", "重心（收市範圍）", 8), ("touches", "頂部觸及次數", 6), ("whi", "25日最高", 9), ("wlo", "25日最低", 9), ("vwap", "25日VWAP", 9),
     ("dvr", "跌日／升日量比（10日）", 8), ("bpos", "收市在當日區間位置", 8), ("rs", "RS21（對全池中位數）%", 8), ("ret21", "21日回報%", 7),
@@ -139,9 +143,9 @@ L = {k: get_column_letter(i) for i, (k, _, _) in enumerate(COLS, 1)}
 CI = {k: i for i, (k, _, _) in enumerate(COLS, 1)}
 style_header(ws, [h for _, h, _ in COLS], [w for _, _, w in COLS], freeze_at="D2")
 
-INPUT_KEYS = {"mcap", "close", "prev", "high", "low", "vol", "vol20", "ema9", "ema21", "ema21l", "steps", "atr",
+INPUT_KEYS = {"macd", "sig", "sigp", "hist", "histp", "histp2", "mcap", "close", "prev", "high", "low", "vol", "vol20", "ema9", "ema21", "ema21l", "steps", "atr",
               "hln", "hllow", "hlprev", "hlage", "hi15", "slh", "sll", "cog", "cogc", "touches", "whi", "wlo", "vwap", "dvr", "rs", "ret21"}
-FMT = {"mcap": '#,##0.00', "close": PX, "prev": PX, "high": PX, "low": PX, "vol": INT, "vol20": INT, "vr": NUM2,
+FMT = {"macd": '0.000', "sig": '0.000', "sigp": '0.000', "sigd": '+0.000;[Red]-0.000', "hist": '0.000', "histp": '0.000', "histp2": '0.000', "mcap": '#,##0.00', "close": PX, "prev": PX, "high": PX, "low": PX, "vol": INT, "vol20": INT, "vr": NUM2,
        "ema9": PX, "ema21": PX, "ema21l": PX, "slope": PCT, "steps": '0%', "d9": PCT, "d21": PCT, "atr": PX, "atrp": PCT1,
        "d9a": NUM2, "d21a": NUM2, "hllow": PX, "hlprev": PX, "hlrise": PCT, "dlow": PCT, "hi15": PX, "pb": PCT,
        "slh": NUM2, "sll": NUM2, "cog": NUM2, "cogc": NUM2, "whi": PX, "wlo": PX, "vwap": PX, "dvr": NUM2, "bpos": NUM2,
@@ -163,6 +167,12 @@ def measure_text(r, k):
         return (f"距EMA9 {r['d9']*100:+.2f}%（{r['d9_atr']:+.2f} ATR）、距EMA21 {r['d21']*100:+.2f}%（{r['d21_atr']:+.2f} ATR）、"
                 f"近3日觸及 9EMA {'有' if r['touch3_9'] else '無'}／21EMA {'有' if r['touch3_21'] else '無'}"
                 f"（要離其中一條 ≤{P['near_pct']*100:.0f}% 兼 ≤{P['near_atr']} ATR 或近 {P['touch_days']} 日觸及；收市唔低過 EMA21 {abs(P['under_tol'])*100:.0f}%）")
+    if k == "C6":
+        return f"MACD 慢線 {r['sig_prev']:.3f} → {r['sig']:.3f}（要升）"
+    if k == "C7":
+        ago = "" if r["turn_ago"] is None else f" {r['turn_ago']} 日前"
+        return (f"柱 {r['hist_prev2']:+.3f} → {r['hist_prev']:+.3f} → {r['hist']:+.3f}（{r['hist_seq']}）；轉勢 {r['turn_kind']}{ago}"
+                f"（要 ≤{P['hist_days']} 日內出現第一根淺紅／深綠，其後每根都升）")
     if k == "C5":
         return (f"重心 {tr['cog']:.2f}（要 ≥{P['cog_min']}）、高位斜率 {tr['sl_hi']:+.2f}%/日（要 {P['high_slope_min']:+.2f} 至 {P['high_slope_max']:+.2f}）、"
                 f"低位斜率 {tr['sl_lo']:+.2f}%/日（要 >0）")
@@ -183,7 +193,9 @@ for r in ALL:
         "touch": touch_txt, "status": r["status"], "xdate": fmt_date(r["cross_date"]), "xdays": r["above_days"],
         "in_a": "✓" if r["in_a"] else "", "in_b": "✓" if r["in_b"] else "", "in_c": "✓" if r["in_c"] else "",
         "hln": hl.get("streak", 0), "hldate": hl.get("last_date", ""), "hllow": hl.get("last_low"), "hlprev": hl.get("prev_low"), "hlage": hl.get("age"),
-        "hi15": r["hi15"], "pat": r["pattern"], "slh": tr["sl_hi"], "sll": tr["sl_lo"], "cog": tr["cog"], "cogc": tr["cog_c"], "touches": tr["touches"],
+        "hi15": r["hi15"], "pat": r["pattern"],
+        "macd": r["macd"], "sig": r["sig"], "sigp": r["sig_prev"], "hist": r["hist"], "histp": r["hist_prev"], "histp2": r["hist_prev2"],
+        "hcol": r["hist_colour"], "turn": r["turn_kind"], "tago": r["turn_ago"] if r["turn_ago"] is not None else "—", "hseq": r["hist_seq"], "slh": tr["sl_hi"], "sll": tr["sl_lo"], "cog": tr["cog"], "cogc": tr["cog_c"], "touches": tr["touches"],
         "whi": tr["hi"], "wlo": tr["lo"], "vwap": tr["vwap"], "dvr": r["dv_ratio"], "rs": r["rs21"], "ret21": r["ret21"],
         "fails": "、".join(CRIT_ZH[k] for k in r["fails"]) if r["fails"] else "全部通過",
         "note": ("日內滾算收市（Yahoo 未出日線）" if r["bar_kind"] == "intraday" else ""),
@@ -206,6 +218,7 @@ for r in ALL:
         "hlrise": f"=IF(ISNUMBER({R['hlprev']}),{R['hllow']}/{R['hlprev']}-1,\"\")",
         "dlow": f"=IF(ISNUMBER({R['hllow']}),{R['close']}/{R['hllow']}-1,\"\")",
         "pb": f"={R['close']}/{R['hi15']}-1",
+        "sigd": f"={R['sig']}-{R['sigp']}",
         "bpos": f"=IF({R['high']}={R['low']},0.5,({R['close']}-{R['low']})/({R['high']}-{R['low']}))",
         "s_tr": ("=100*(0.4*" + lin_f(R["slope"] + "*100", *LIN["t_slope"])
                  + "+0.3*" + lin_f(R["steps"], *LIN["t_steps"])
@@ -224,9 +237,9 @@ for r in ALL:
     }
     for k, v in f.items():
         put(ws, rr, CI[k], v, FMT.get(k), BOLD if k == "score" else BASE)
-    if t2:
+    if t2 or r["tier"] == 3:
         for j in range(1, len(COLS) + 1):
-            ws.cell(row=rr, column=j).fill = T2_FILL
+            ws.cell(row=rr, column=j).fill = T2_FILL if t2 else T3_FILL
         ws.cell(row=rr, column=CI["fails"]).comment = Comment(
             "\n".join(measure_text(r, k) for k in r["fails"]), "9EMA scan", width=520, height=120)
     if r["status"] == "剛黃金交叉":
@@ -241,6 +254,7 @@ put(ws, srow, 1, "全表統計", font=BOLD, border=False)
 stats = [
     ("第一梯隊", f"=COUNTIF({L['tier']}2:{L['tier']}{last_row},1)", None),
     ("第二梯隊", f"=COUNTIF({L['tier']}2:{L['tier']}{last_row},2)", None),
+    ("第三梯隊（只差MACD）", f"=COUNTIF({L['tier']}2:{L['tier']}{last_row},3)", None),
     ("剛黃金交叉", f"=COUNTIF({L['status']}2:{L['status']}{last_row},\"剛黃金交叉\")", None),
     ("b 回到21EMA", f"=COUNTIFS({L['tier']}2:{L['tier']}{last_row},1,{L['in_b']}2:{L['in_b']}{last_row},\"✓\")", None),
     ("c 回到9EMA", f"=COUNTIFS({L['tier']}2:{L['tier']}{last_row},1,{L['in_c']}2:{L['in_c']}{last_row},\"✓\")", None),
@@ -263,7 +277,7 @@ put(ws, srow + 3, 1,
     (f"口徑：以 {LAST} 收市嘅 Yahoo 日線計；EMA 用標準指數平滑（α=2/(N+1)），ATR14 用 Wilder 平滑。藍字＝量度值（輸入），黑字＝公式；"
      f"當日%、量比、EMA21 斜率、距 EMA／底／15 日高、ATR 倍數、收市區間位置、四個分數同綜合分數全部係公式，改動輸入會自動重算。"
      f"灰底＝第二梯隊（只差一項，「唔過嘅條件」格嘅註解列明量度值同門檻）；綠底狀態＝9EMA 喺 {P['cross_days']} 日內剛黃金交叉 21EMA。"
-     f"a／b／c 三欄 ✓ ＝ 該股喺對應分頁（b 同 c 互斥：離兩條 EMA 都近就歸較近嗰條）。"
+     f"a／b／c 三欄 ✓ ＝ 該股喺對應分頁（b 同 c 互斥：離兩條 EMA 都近就歸較近嗰條）。橙底＝第三梯隊：價格四項全過、只差 MACD 慢線／柱轉勢（候補，等第一根淺紅／深綠）。"
      f"RS21 同全池中位數 21 日回報（{META['median_ret21']*100:+.2f}%）比較。"),
     font=NOTE, border=False)
 ws.cell(row=srow + 3, column=1).alignment = Alignment(wrap_text=False)
@@ -274,17 +288,19 @@ ABC_COLS = [("rank_in", "頁內排名", 6), ("sym", "代號", 8), ("name", "公�
             ("d9a", "距EMA9（ATR倍）", 7), ("d21a", "距EMA21（ATR倍）", 7), ("touch", "近3日低位觸及", 8), ("slope", "EMA21 5日斜率%", 7),
             ("status", "9/21狀態", 9), ("xdate", "金叉日期", 10), ("xdays", "金叉後日數", 6), ("hln", "連續上升底數目", 6), ("hldate", "最後一底日期", 10), ("dlow", "距最後一底%", 7),
             ("pb", "距15日高%", 7), ("pat", "形態（25日）", 13), ("cog", "重心", 7), ("rs", "RS21%", 7),
-            ("s_tr", "趨勢分數", 7), ("s_pb", "回調質素", 7), ("s_hl", "底部結構", 7), ("s_tri", "三角形分數", 7), ("score", "綜合分數", 7), ("rank", "總表排名", 6)]
+            ("hcol", "柱顏色", 6), ("turn", "柱轉勢", 9), ("tago", "轉勢幾日前", 6), ("sigd", "慢線斜率", 8),
+            ("s_tr", "趨勢分數", 7), ("s_pb", "回調質素", 7), ("s_hl", "底部結構", 7), ("s_tri", "三角形分數", 7), ("score", "綜合分數", 7),
+            ("tier", "梯隊", 5), ("rank", "總表排名", 6), ("fails", "唔過嘅條件", 14)]
 ABC_NOTE = {
-    "a": f"核心四條件全過，而且 9EMA 喺最近 {P['cross_days']} 個交易日內剛升穿 21EMA（金叉日期欄）。",
-    "b": f"核心四條件全過，而且收市離 EMA21 ≤{P['near_pct']*100:.0f}% 兼（≤{P['near_atr']} ATR14 或近 {P['touch_days']} 日最低價觸及 EMA21）、收市唔低過 EMA21 {abs(P['under_tol'])*100:.0f}%；離兩條 EMA 都近嘅股票歸較近嗰條（呢頁係較深嘅回調）。",
-    "c": f"核心四條件全過，而且收市離 EMA9 ≤{P['near_pct']*100:.0f}% 兼（≤{P['near_atr']} ATR14 或近 {P['touch_days']} 日最低價觸及 EMA9），而且唔喺 b 頁（呢頁係較淺嘅回調）。",
+    "a": f"核心六條件全過，而且 9EMA 喺最近 {P['cross_days']} 個交易日內剛升穿 21EMA（金叉日期欄）。",
+    "b": f"核心六條件全過，而且收市離 EMA21 ≤{P['near_pct']*100:.0f}% 兼（≤{P['near_atr']} ATR14 或近 {P['touch_days']} 日最低價觸及 EMA21）、收市唔低過 EMA21 {abs(P['under_tol'])*100:.0f}%；離兩條 EMA 都近嘅股票歸較近嗰條（呢頁係較深嘅回調）。",
+    "c": f"核心六條件全過，而且收市離 EMA9 ≤{P['near_pct']*100:.0f}% 兼（≤{P['near_atr']} ATR14 或近 {P['touch_days']} 日最低價觸及 EMA9），而且唔喺 b 頁（呢頁係較淺嘅回調）。",
 }
 for key in ("a", "b", "c"):
     wp = wb.create_sheet(SHEET_ZH[key])
     style_header(wp, [h for _, h, _ in ABC_COLS], [w for _, _, w in ABC_COLS], freeze_at="C2")
     rp = 2
-    for k, r in enumerate([x for x in rows if x[f"in_{key}"]], 1):
+    for k, r in enumerate([x for x in ALL if x[f"in_{key}"]], 1):
         src = ROW_OF[r["sym"]]
         for j, (ck, _, _) in enumerate(ABC_COLS, 1):
             if ck == "rank_in":
@@ -293,16 +309,22 @@ for key in ("a", "b", "c"):
                 link_ticker(wp, rp, j, r["sym"], r["exch"])
             else:
                 put(wp, rp, j, f"='總表'!{L[ck]}{src}", FMT.get(ck), BOLD if ck == "score" else BASE)
-        if r["status"] == "剛黃金交叉":
+        if r["tier"] in (2, 3):
+            for j in range(1, len(ABC_COLS) + 1):
+                wp.cell(row=rp, column=j).fill = T2_FILL if r["tier"] == 2 else T3_FILL
+        elif r["status"] == "剛黃金交叉":
             wp.cell(row=rp, column=[i for i, (kk, _, _) in enumerate(ABC_COLS, 1) if kk == "status"][0]).fill = X_FILL
         rp += 1
-    put(wp, rp + 1, 1, ABC_NOTE[key] + " 每格引用總表同一行，改總表會跟住變。", font=NOTE, border=False)
+    n_t1 = sum(1 for x in rows if x[f"in_{key}"]); n_t2 = sum(1 for x in tier2 if x[f"in_{key}"]); n_t3 = sum(1 for x in tier3 if x[f"in_{key}"])
+    put(wp, rp + 1, 1, ABC_NOTE[key] + f" 第一梯隊 {n_t1} 隻；灰底＝第二梯隊（只差一項）{n_t2} 隻；橙底＝第三梯隊（價格四項過、只差 MACD 慢線／柱轉勢，候補）{n_t3} 隻；「唔過嘅條件」欄列明。每格引用總表同一行，改總表會跟住變。", font=NOTE, border=False)
 
 # ================================================================ 大型／中型／小型
 PAGE_COLS = [("rank_in", "組內排名", 6), ("sym", "代號", 8), ("name", "公司", 26), ("sec", "板塊", 9), ("ind", "行業", 24), ("mcap", "市值(十億美元)", 9),
              ("close", "收市價", 9), ("chg", "當日%", 7), ("ema9", "EMA9", 9), ("ema21", "EMA21", 9), ("d9", "距EMA9%", 7), ("d21", "距EMA21%", 7),
              ("slope", "EMA21 5日斜率%", 7), ("status", "9/21狀態", 9), ("xdays", "金叉後日數", 6), ("hln", "連續上升底數目", 6), ("pb", "距15日高%", 7),
-             ("pat", "形態（25日）", 13), ("cog", "重心", 7), ("rs", "RS21%", 7), ("s_tr", "趨勢分數", 7), ("s_pb", "回調質素", 7), ("s_hl", "底部結構", 7),
+             ("macd", "MACD", 8), ("sig", "MACD慢線", 8), ("sigp", "慢線（前日）", 8), ("sigd", "慢線斜率", 8),
+    ("hist", "柱（今日）", 8), ("histp", "柱（前日）", 8), ("histp2", "柱（前2日）", 8), ("hcol", "柱顏色", 6), ("turn", "柱轉勢", 9), ("tago", "轉勢幾日前", 6), ("hseq", "柱顏色序列（舊→新）", 26),
+    ("pat", "形態（25日）", 13), ("cog", "重心", 7), ("rs", "RS21%", 7), ("s_tr", "趨勢分數", 7), ("s_pb", "回調質素", 7), ("s_hl", "底部結構", 7),
              ("s_tri", "三角形分數", 7), ("score", "綜合分數", 7), ("rank", "總表排名", 6)]
 for cap, title in (("a", "大型股"), ("b", "中型股"), ("c", "小型股")):
     wp = wb.create_sheet(title)
@@ -333,6 +355,7 @@ LOOSE_TXT = {
     "C2": "同嚴格",
     "C3": f"回望 {PL['hl_look']} 日、最後一底 ≤{PL['hl_recent']} 日前",
     "C5": f"重心 ≥{PL['cog_min']}、高位斜率 {PL['high_slope_min']:+.2f} 至 {PL['high_slope_max']:+.2f} %/日、低位斜率 >0",
+    "C6": "同嚴格", "C7": f"轉勢 ≤{PL['hist_days']} 日內",
 }
 rd = 2
 for r in tier2:
@@ -370,7 +393,7 @@ put(wv, rv + 1, 1,
 # ================================================================ 篩選規則
 wr = wb.create_sheet("篩選規則")
 wr.column_dimensions["A"].width = 24; wr.column_dimensions["B"].width = 110; wr.column_dimensions["C"].width = 16; wr.column_dimensions["D"].width = 14
-put(wr, 1, 1, f"{REV} 篩選條件：21EMA 向上 ＋ 9EMA 在 21EMA 上 ＋ 一底高於一底 ＋ 上升三角（重心偏上）；分頁 a 剛黃金交叉／b 回到 21EMA／c 回到 9EMA", font=TITLE, border=False)
+put(wr, 1, 1, f"{REV} 篩選條件：21EMA 向上 ＋ 9EMA 在 21EMA 上 ＋ 一底高於一底 ＋ 上升三角（重心偏上）＋ MACD 慢線向上 ＋ MACD 柱轉勢；分頁 a 剛黃金交叉／b 回到 21EMA／c 回到 9EMA", font=TITLE, border=False)
 put(wr, 2, 1, "說明", font=BOLD)
 put(wr, 2, 2, (f"全美上市普通股（Nasdaq／NYSE／AMEX，{META['symbols']:,} 隻）用 Yahoo 日線量度，數據終點 {LAST} 收市（{META['sessions']} 個交易日，{META['first_date']} 起）。"
                f"EMA 用標準指數平滑 α=2/(N+1)，ATR14 用 Wilder 平滑。單獨通過＝只計該項；累計＝由 C1 起逐項收窄。"), align=WRAP)
@@ -386,12 +409,16 @@ rules = [
      META["single"]["C3"], META["cumulative"]["C3"]),
     ("C4 上升三角／重心偏上", f"近 {P['tri_win']} 日：VWAP 喺高低區間嘅位置（重心）≥{P['cog_min']}；樞軸低位嘅最小二乘斜率 >0；樞軸高位斜率喺 {P['high_slope_min']:+.2f} 至 {P['high_slope_max']:+.2f} %/日之間"
                           f"（平頂至微升：頂部下傾係對稱三角、頂部急升係通道，都唔係上升三角）", META["single"]["C5"], META["cumulative"]["C5"]),
-    ("第一梯隊（總表）", "四項全過，按綜合分數排", "", META["tier1"]),
-    ("a 剛黃金交叉", f"第一梯隊入面 9EMA 喺 {P['cross_days']} 日內剛升穿 21EMA", "", len(SHEETS["a"])),
+    ("C5 MACD 慢線向上", f"MACD（EMA{P['macd_fast']} − EMA{P['macd_slow']}）嘅慢線（訊號線，MACD 嘅 EMA{P['macd_sig']}）高過前一日", META["single"]["C6"], META["cumulative"]["C6"]),
+    ("C6 MACD 柱轉勢", f"柱 = MACD − 慢線，顏色跟 TradingView：柱 ≥0 升＝深綠、跌＝淺綠；柱 <0 跌＝深紅、升＝淺紅。要近 {P['hist_days']} 日內出現第一根「深紅之後嘅淺紅」（跌勢減速）或「淺綠之後嘅深綠」（升勢再加速），而且由嗰根起每根都升",
+     META["single"]["C7"], META["cumulative"]["C7"]),
+    ("第一梯隊（總表）", "六項全過，按綜合分數排", "", META["tier1"]),
+    ("a 剛黃金交叉", f"第一梯隊（另加灰底第二梯隊）入面 9EMA 喺 {P['cross_days']} 日內剛升穿 21EMA", "", len(SHEETS["a"])),
     ("b 回到 21EMA", f"第一梯隊入面收市離 EMA21 ≤{P['near_pct']*100:.0f}% 兼（≤{P['near_atr']} ATR14 或近 {P['touch_days']} 日最低價 ≤ 當日 EMA21×{1+P['touch_tol']:.3f}）、收市唔低過 EMA21 {abs(P['under_tol'])*100:.0f}%；離兩條都近就歸較近嗰條", "", len(SHEETS["b"])),
     ("c 回到 9EMA", f"第一梯隊入面收市離 EMA9 ≤{P['near_pct']*100:.0f}% 兼（≤{P['near_atr']} ATR14 或近 {P['touch_days']} 日最低價 ≤ 當日 EMA9×{1+P['touch_tol']:.3f}），而且唔喺 b 頁", "", len(SHEETS["c"])),
+    ("第三梯隊（候補）", "價格四項（C1–C4）全過、只差 MACD 慢線／柱轉勢；總表橙底，分頁都列埋，等第一根淺紅／深綠出現", "", META.get("tier3", 0)),
     ("第二梯隊", f"只唔過一項，而且嗰項喺放寬門檻下通過（金叉 ≤{PL['cross_days']} 日；底回望 {PL['hl_look']} 日／最後一底 ≤{PL['hl_recent']} 日；"
-                f"重心 ≥{PL['cog_min']}、高位斜率 {PL['high_slope_min']:+.2f} 至 {PL['high_slope_max']:+.2f}）；「差一項」頁列明每隻差邊項", "", META["tier2"]),
+                f"重心 ≥{PL['cog_min']}、高位斜率 {PL['high_slope_min']:+.2f} 至 {PL['high_slope_max']:+.2f}；柱轉勢 ≤{PL['hist_days']} 日）；「差一項」頁列明每隻差邊項", "", META["tier2"]),
 ]
 rw_ = 3
 for a, b, c, d in rules:
@@ -591,10 +618,10 @@ cap_n = {k: sum(1 for r in rows if r["cap"] == k) for k in "abc"}
 top5 = "、".join(f"{r['sym']}（{r['score']:.0f}）" for r in rows[:5])
 na, nb, nc = (len(SHEETS[k]) for k in "abc")
 upd = [
-    f"{REV}：核心條件改為四項 —— ① 21EMA 向上（EMA21 高過前一日同 5 日前）② 9EMA 在 21EMA 上方 ③ 一底高於一底（樞軸底遞升、最後一底 ≤{P['hl_recent']} 日前）④ 形態接近上升三角：25 日重心 ≥{P['cog_min']}、低位斜率 >0、高位平至微升。「回到 9/21EMA」唔再係核心門檻，改為分頁條件。",
-    f"三個分頁（都係第一梯隊嘅子集、引用總表）：a 剛黃金交叉（{P['cross_days']} 日內金叉）{na} 隻；b 回到 21EMA（離 EMA21 ≤{P['near_pct']*100:.0f}% 兼 ≤{P['near_atr']} ATR 或近 {P['touch_days']} 日觸及）{nb} 隻；c 回到 9EMA（同樣口徑對 EMA9，離兩條都近就歸較近嗰條）{nc} 隻。總表加咗 a／b／c 三欄 ✓。",
+    f"{REV}：加入 MACD（{P['macd_fast']}/{P['macd_slow']}/{P['macd_sig']}）兩個核心條件 —— ⑤ 慢線（訊號線）高過前一日 ⑥ 柱狀圖動能轉勢：近 {P['hist_days']} 日內出現第一根「深紅之後嘅淺紅」或「淺綠之後嘅深綠」，其後每根都升（顏色跟 TradingView 四色柱）。連同 ① 21EMA 向上 ② 9EMA 在 21EMA 上 ③ 一底高於一底 ④ 上升三角重心偏上，六項全過＝第一梯隊。總表加咗 MACD、慢線、慢線斜率、三日柱值、柱顏色、轉勢種類／幾日前、柱顏色序列。",
+    f"三個分頁（引用總表）：a 剛黃金交叉（{P['cross_days']} 日內金叉）{na} 隻；b 回到 21EMA（離 EMA21 ≤{P['near_pct']*100:.0f}% 兼 ≤{P['near_atr']} ATR 或近 {P['touch_days']} 日觸及）{nb} 隻；c 回到 9EMA（同樣口徑對 EMA9，離兩條都近就歸較近嗰條）{nc} 隻 —— 都係第一梯隊數目；每頁下方另加灰底第二梯隊（只差一項）同橙底第三梯隊（價格四項過、只差 MACD，共 {META.get('tier3', 0)} 隻）畀你候補。b 頁第一梯隊得零隻：回到 21EMA 嘅股票柱狀圖多數仲喺減速中、未出現第一根淺紅／深綠，候補嗰啲就係要等嘅名。",
     f"數據更新至 {LAST} 收市（{META['sessions']} 個交易日，{META['first_date']} 起；Yahoo 日線由 GitHub Actions 抓取）。",
-    f"合資格 {META['eligible']:,} 隻 → C1 {META['cumulative']['C1']} → C2 {META['cumulative']['C2']} → C3 {META['cumulative']['C3']} → C4 第一梯隊 {META['tier1']} 隻（大型 {cap_n['a']}／中型 {cap_n['b']}／小型 {cap_n['c']}；平頂上升三角 {tri1} 隻）。第二梯隊（差一項）{META['tier2']} 隻。",
+    f"合資格 {META['eligible']:,} 隻 → C1 {META['cumulative']['C1']} → C2 {META['cumulative']['C2']} → C3 {META['cumulative']['C3']} → C4 {META['cumulative']['C5']} → C5 MACD 慢線 {META['cumulative']['C6']} → C6 柱轉勢 第一梯隊 {META['tier1']} 隻（大型 {cap_n['a']}／中型 {cap_n['b']}／小型 {cap_n['c']}；平頂上升三角 {tri1} 隻）。第二梯隊（差一項）{META['tier2']} 隻。",
     f"排名：綜合分數 = {WT['trend']} 趨勢 + {WT['pb']} 回調質素 + {WT['hl']} 底部結構 + {WT['tri']} 三角形（每項 0–100，總表全部係公式）。頭五位：{top5}。",
     f"市況：{mkt.get('headline', '')}（市況頁有指數／ETF／商品／債息嘅 EMA 狀態、合資格股票池闊度、四大力量周期對標同領先指標觀察表）。",
     "頁：總表（兩個梯隊）、a 剛黃金交叉、b 回到21EMA、c 回到9EMA、大型股／中型股／小型股（引用總表）、差一項、樞軸底頂、篩選規則、市況、數據核對。所有代號連 TradingView；藍字係量度值、黑字係公式。",

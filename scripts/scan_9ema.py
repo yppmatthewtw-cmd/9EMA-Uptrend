@@ -28,6 +28,15 @@ Yahoo has not published daily bars for yet).
                       The flatness of the top, the rise of the lows, the 重心 and
                       the number of touches of the top make the pattern score.
 
+  C6 MACD 慢線向上      the MACD signal line (EMA9 of EMA12 − EMA26) is higher
+                      than the session before.
+  C7 柱狀圖動能轉勢     the histogram's first bar of slowing decline (a 淺紅 bar
+                      after 深紅: hist < 0 and rising after falling) or of
+                      re-accelerating advance (a 深綠 bar after 淺綠: hist >= 0
+                      and rising after falling) printed within the last
+                      hist_days sessions, and every bar since has kept rising.
+                      Colours follow TradingView's four-colour histogram.
+
 Universe: a bar on t, >= min_hist sessions of history, close >= min_px,
 20-session median dollar volume >= min_dv.
 
@@ -56,8 +65,10 @@ Sheets (subsets of the first tier, R2.00 onward; a name can sit on more than one
                       the sheet of the EMA its close is nearer to (by %), so b
                       holds the deeper pull-backs and c the shallow ones.
 
-Second tier (差一項): fails exactly one of C1/C2/C3/C5 at the strict thresholds
-but passes it at the loosened ones.
+Second tier (差一項): fails exactly one of C1/C2/C3/C5/C6/C7 at the strict
+thresholds but passes it at the loosened ones.  Third tier (候補): passes the
+four price criteria and fails only the MACD ones, i.e. the names to watch for
+the histogram's turn.
 
 Env: YAHOO (comma list of daily .csv.gz, oldest first; later files win on a
 duplicate symbol/date), SUPP (comma list of intraday roll-up .csv.gz used only
@@ -87,9 +98,10 @@ P0 = {
     "piv": 3, "hl_look": 60, "hl_recent": 30,
     "near_atr": 0.75, "near_pct": 0.03, "touch_tol": 0.005, "touch_days": 3, "under_tol": -0.03,
     "tri_win": 25, "cog_min": 0.50, "high_slope_min": -0.10, "high_slope_max": 1.0,
+    "macd_fast": 12, "macd_slow": 26, "macd_sig": 9, "hist_days": 3,
 }
 PL = dict(P0, cross_days=8, hl_look=80, hl_recent=40, near_atr=1.25, near_pct=0.05, touch_tol=0.01,
-          under_tol=-0.05, cog_min=0.45, high_slope_min=-0.20, high_slope_max=1.5)
+          under_tol=-0.05, cog_min=0.45, high_slope_min=-0.20, high_slope_max=1.5, hist_days=5)
 W = {"trend": 0.25, "pb": 0.25, "hl": 0.20, "tri": 0.30}
 LIN = {   # (x0 -> 0, x1 -> 1) for every sub-score, mirrored in the workbook formulas
     "t_slope": (0.0, 2.5), "t_steps": (0.6, 1.0), "t_rs": (0.0, 15.0),
@@ -281,6 +293,29 @@ for sym in elig:
     n = len(c); t = n - 1
     e9, e21 = ema(c, 9), ema(c, 21)
     a14 = atr(h, l, c, 14)
+    macd_line = ema(c, P0["macd_fast"]) - ema(c, P0["macd_slow"])
+    sig = ema(macd_line, P0["macd_sig"])
+    hist = macd_line - sig
+
+    def hist_colour(i):            # TradingView's four-colour histogram
+        if hist[i] >= 0:
+            return "深綠" if hist[i] > hist[i - 1] else "淺綠"
+        return "深紅" if hist[i] < hist[i - 1] else "淺紅"
+
+    colours = [hist_colour(i) for i in range(t - 7, t + 1)]
+    # the momentum turn: first 淺紅 after 深紅, or first 深綠 after 淺綠 — how many sessions ago, with every bar since still improving
+    turn_ago = None
+    for k in range(0, 8):
+        i = t - k
+        improving = all(hist[j] > hist[j - 1] for j in range(i, t + 1))
+        if not improving:
+            break
+        if hist[i] < 0 and hist[i - 1] < hist[i - 2]:          # 深紅 → 淺紅
+            turn_ago = k; turn_kind = "深紅→淺紅"; break
+        if hist[i] >= 0 and hist[i - 1] <= hist[i - 2] and hist[i - 1] >= 0:   # 淺綠 → 深綠
+            turn_ago = k; turn_kind = "淺綠→深綠"; break
+    if turn_ago is None:
+        turn_kind = "—"
     rets21[sym] = c[t] / c[t - 21] - 1
     # C1
     lag = P0["slope_lag"]
@@ -361,7 +396,9 @@ for sym in elig:
         c3 = bool(hl and hl["ok"])
         c5 = (cog >= P["cog_min"] and (sl_lo is not None and sl_lo > 0)
               and (sl_hi is not None and P["high_slope_min"] <= sl_hi <= P["high_slope_max"]))
-        return [bool(c1), bool(c2), c3, bool(c5)]
+        c6 = sig[t] > sig[t - 1]                                   # MACD 慢線（訊號線）向上
+        c7 = turn_ago is not None and turn_ago <= P["hist_days"]    # 柱狀圖動能減速／加速嘅第一根已出現
+        return [bool(c1), bool(c2), c3, bool(c5), bool(c6), bool(c7)]
 
     def near(P):
         """Sheet conditions (not core criteria): price back at the 9EMA / 21EMA."""
@@ -373,11 +410,14 @@ for sym in elig:
     f0 = crit(P0, hl0)
     fL = crit(PL, hlL)
     near9_0, near21_0 = near(P0)
-    fails0 = [k for k, ok in zip(("C1", "C2", "C3", "C5"), f0) if not ok]
-    tier = 1 if not fails0 else (2 if len(fails0) == 1 and all(fL) else 0)
+    fails0 = [k for k, ok in zip(("C1", "C2", "C3", "C5", "C6", "C7"), f0) if not ok]
+    tier = 1 if not fails0 else (2 if len(fails0) == 1 and all(fL) else (3 if set(fails0) <= {"C6", "C7"} else 0))
     which = "9EMA" if abs(d9_atr) <= abs(d21_atr) else "21EMA"
     rows[sym] = {
-        "sym": sym, "tier": tier, "fails": fails0, "fails_loose": [k for k, ok in zip(("C1", "C2", "C3", "C5"), fL) if not ok],
+        "sym": sym, "tier": tier, "fails": fails0, "fails_loose": [k for k, ok in zip(("C1", "C2", "C3", "C5", "C6", "C7"), fL) if not ok],
+        "macd": round(float(macd_line[t]), 4), "sig": round(float(sig[t]), 4), "sig_prev": round(float(sig[t - 1]), 4),
+        "hist": round(float(hist[t]), 4), "hist_prev": round(float(hist[t - 1]), 4), "hist_prev2": round(float(hist[t - 2]), 4),
+        "hist_colour": colours[-1], "hist_seq": " ".join(colours), "turn_ago": turn_ago, "turn_kind": turn_kind,
         "near9": near9_0, "near21": near21_0,
         "close": round(float(c[t]), 4), "prev": round(float(c[t - 1]), 4), "open": round(float(o[t]), 4),
         "high": round(float(h[t]), 4), "low": round(float(l[t]), 4), "vol": float(v[t]),
@@ -461,7 +501,7 @@ for sym, r in rows.items():
     r["score"] = round(W["trend"] * r["s_trend"] + W["pb"] * r["s_pb"] + W["hl"] * r["s_hl"] + W["tri"] * r["s_tri"], 3)
 
 # ---------------------------------------------------------------- funnel of the criteria
-crit_names = ["C1", "C2", "C3", "C5"]
+crit_names = ["C1", "C2", "C3", "C5", "C6", "C7"]
 single = {k: sum(1 for r in rows.values() if k not in r["fails"]) for k in crit_names}
 cum = []
 alive = list(rows.values())
@@ -470,6 +510,9 @@ for k in crit_names:
     cum.append(len(alive))
 tier1 = sorted([r for r in rows.values() if r["tier"] == 1], key=lambda r: -r["score"])
 tier2 = sorted([r for r in rows.values() if r["tier"] == 2], key=lambda r: -r["score"])
+tier3 = sorted([r for r in rows.values() if r["tier"] == 3], key=lambda r: -r["score"])   # core four pass, only MACD missing (候補)
+for i, r in enumerate(tier3, 1):
+    r["rank"] = i
 for i, r in enumerate(tier1, 1):
     r["rank"] = i
 for i, r in enumerate(tier2, 1):
@@ -482,7 +525,7 @@ for r in rows.values():
     r["in_c"] = r["near9"] and not r["in_b"]
 sheets = {k: [r["sym"] for r in tier1 if r[f"in_{k}"]] for k in ("a", "b", "c")}
 print("single-criterion passes:", single, "cumulative:", dict(zip(crit_names, cum)))
-print(f"tier1 {len(tier1)}  tier2 {len(tier2)}")
+print(f"tier1 {len(tier1)}  tier2 {len(tier2)}  tier3 (MACD 候補) {len(tier3)}")
 print("sheets a/b/c:", {k: len(v) for k, v in sheets.items()}, " b∩c:", len(set(sheets["b"]) & set(sheets["c"])))
 
 # ---------------------------------------------------------------- breadth of the eligible universe (last 10 sessions)
@@ -539,10 +582,10 @@ for r in tier1:
 out = {
     "meta": {"last_date": last_date, "first_date": cal[0], "sessions": T, "symbols": n_sym_all,
              "funnel": funnel, "eligible": len(elig), "single": single, "cumulative": dict(zip(crit_names, cum)),
-             "tier1": len(tier1), "tier2": len(tier2), "params": P0, "params_loose": PL, "weights": W, "lin": LIN,
+             "tier1": len(tier1), "tier2": len(tier2), "tier3": len(tier3), "params": P0, "params_loose": PL, "weights": W, "lin": LIN,
              "median_ret21": med21, "sources": YAHOO + SUPP, "snapshot": SNAP,
              "intraday_fill": int((bars[bars.date == last_date].kind == "intraday").sum())},
-    "rows": tier1, "tier2": tier2, "sheets": sheets,
+    "rows": tier1, "tier2": tier2, "tier3": tier3, "sheets": sheets,
     "breadth": breadth, "sector_counts": dict(sector_counts),
     "all_fail_counts": {k: sum(1 for r in rows.values() if k in r["fails"]) for k in crit_names},
 }
