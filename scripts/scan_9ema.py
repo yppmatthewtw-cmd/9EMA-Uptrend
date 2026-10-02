@@ -20,12 +20,6 @@ Yahoo has not published daily bars for yet).
                       hl_look sessions must rise, the latest must be <= hl_recent
                       sessions ago, and no close since may sit below it.  The
                       length of the rising streak is recorded.
-  C4 回到 9EMA/21EMA   the close is within near_pct of EMA9 or of EMA21 and, for
-                      that EMA, either within near_atr x ATR14 of it or a low
-                      inside the last touch_days sessions touched that day's EMA
-                      (low <= EMA x (1 + touch_tol)); the close must not sit
-                      more than under_tol below EMA21 (a breakdown is not a
-                      pull-back).
   C5 上升三角／重心偏上  over the last tri_win sessions: the volume-weighted
                       average price's position inside the window's high-low
                       range (重心) >= cog_min, the regression slope of the lows > 0, and
@@ -51,8 +45,19 @@ recompute them from the inputs beside them):
              >=2 -> 1, 1 -> 0.5)
   綜合分數   0.25 趨勢 + 0.25 回調質素 + 0.20 底部結構 + 0.30 三角形
 
-Second tier (差一項): fails exactly one of C1-C5 at the strict thresholds but
-passes it at the loosened ones.
+Sheets (subsets of the first tier, R2.00 onward; a name can sit on more than one):
+  a 剛黃金交叉        the golden cross is <= cross_days sessions ago.
+  b 回到 21EMA        the close is within near_pct of EMA21 and either within
+                      near_atr x ATR14 of it or a low inside the last touch_days
+                      sessions touched that day's EMA21 (low <= EMA x (1 +
+                      touch_tol)); the close must not sit more than under_tol
+                      below EMA21 (a breakdown is not a pull-back).
+  c 回到 9EMA         the same measured against EMA9.  A name near both goes to
+                      the sheet of the EMA its close is nearer to (by %), so b
+                      holds the deeper pull-backs and c the shallow ones.
+
+Second tier (差一項): fails exactly one of C1/C2/C3/C5 at the strict thresholds
+but passes it at the loosened ones.
 
 Env: YAHOO (comma list of daily .csv.gz, oldest first; later files win on a
 duplicate symbol/date), SUPP (comma list of intraday roll-up .csv.gz used only
@@ -354,20 +359,26 @@ for sym in elig:
         c1 = e21[t] > e21[t - 1] and e21[t] > e21[t - P["slope_lag"]]
         c2 = e9[t] > e21[t]
         c3 = bool(hl and hl["ok"])
-        near9 = abs(d9) <= P["near_pct"] and (abs(d9_atr) <= P["near_atr"] or touched(e9, P))
-        near21 = abs(d21) <= P["near_pct"] and (abs(d21_atr) <= P["near_atr"] or touched(e21, P))
-        c4 = (near9 or near21) and d21 >= P["under_tol"]
         c5 = (cog >= P["cog_min"] and (sl_lo is not None and sl_lo > 0)
               and (sl_hi is not None and P["high_slope_min"] <= sl_hi <= P["high_slope_max"]))
-        return [bool(c1), bool(c2), c3, bool(c4), bool(c5)]
+        return [bool(c1), bool(c2), c3, bool(c5)]
+
+    def near(P):
+        """Sheet conditions (not core criteria): price back at the 9EMA / 21EMA."""
+        near9 = abs(d9) <= P["near_pct"] and (abs(d9_atr) <= P["near_atr"] or touched(e9, P))
+        near21 = abs(d21) <= P["near_pct"] and (abs(d21_atr) <= P["near_atr"] or touched(e21, P))
+        held = d21 >= P["under_tol"]
+        return bool(near9 and held), bool(near21 and held)
 
     f0 = crit(P0, hl0)
     fL = crit(PL, hlL)
-    fails0 = [k for k, ok in zip(("C1", "C2", "C3", "C4", "C5"), f0) if not ok]
+    near9_0, near21_0 = near(P0)
+    fails0 = [k for k, ok in zip(("C1", "C2", "C3", "C5"), f0) if not ok]
     tier = 1 if not fails0 else (2 if len(fails0) == 1 and all(fL) else 0)
     which = "9EMA" if abs(d9_atr) <= abs(d21_atr) else "21EMA"
     rows[sym] = {
-        "sym": sym, "tier": tier, "fails": fails0, "fails_loose": [k for k, ok in zip(("C1", "C2", "C3", "C4", "C5"), fL) if not ok],
+        "sym": sym, "tier": tier, "fails": fails0, "fails_loose": [k for k, ok in zip(("C1", "C2", "C3", "C5"), fL) if not ok],
+        "near9": near9_0, "near21": near21_0,
         "close": round(float(c[t]), 4), "prev": round(float(c[t - 1]), 4), "open": round(float(o[t]), 4),
         "high": round(float(h[t]), 4), "low": round(float(l[t]), 4), "vol": float(v[t]),
         "bar_kind": s["kind"][t],
@@ -450,7 +461,7 @@ for sym, r in rows.items():
     r["score"] = round(W["trend"] * r["s_trend"] + W["pb"] * r["s_pb"] + W["hl"] * r["s_hl"] + W["tri"] * r["s_tri"], 3)
 
 # ---------------------------------------------------------------- funnel of the criteria
-crit_names = ["C1", "C2", "C3", "C4", "C5"]
+crit_names = ["C1", "C2", "C3", "C5"]
 single = {k: sum(1 for r in rows.values() if k not in r["fails"]) for k in crit_names}
 cum = []
 alive = list(rows.values())
@@ -463,13 +474,16 @@ for i, r in enumerate(tier1, 1):
     r["rank"] = i
 for i, r in enumerate(tier2, 1):
     r["rank"] = i
-cross_pool = sorted([r for r in rows.values() if r["status"] == "剛黃金交叉" and "C1" not in r["fails"] and "C4" not in r["fails"]],
-                    key=lambda r: -r["score"])
-for i, r in enumerate(cross_pool, 1):
-    r["cross_rank"] = i
+# the three sheets: subsets of the first tier
+for r in rows.values():
+    r["in_a"] = r["status"] == "剛黃金交叉"
+    closer21 = abs(r["d21"]) <= abs(r["d9"])          # the EMA the close sits nearer to (by %)
+    r["in_b"] = r["near21"] and (closer21 or not r["near9"])
+    r["in_c"] = r["near9"] and not r["in_b"]
+sheets = {k: [r["sym"] for r in tier1 if r[f"in_{k}"]] for k in ("a", "b", "c")}
 print("single-criterion passes:", single, "cumulative:", dict(zip(crit_names, cum)))
 print(f"tier1 {len(tier1)}  tier2 {len(tier2)}")
-print("fresh golden cross in tier1:", sum(1 for r in tier1 if r["status"] == "剛黃金交叉"), " cross pool:", len(cross_pool))
+print("sheets a/b/c:", {k: len(v) for k, v in sheets.items()}, " b∩c:", len(set(sheets["b"]) & set(sheets["c"])))
 
 # ---------------------------------------------------------------- breadth of the eligible universe (last 10 sessions)
 breadth = []
@@ -528,7 +542,7 @@ out = {
              "tier1": len(tier1), "tier2": len(tier2), "params": P0, "params_loose": PL, "weights": W, "lin": LIN,
              "median_ret21": med21, "sources": YAHOO + SUPP, "snapshot": SNAP,
              "intraday_fill": int((bars[bars.date == last_date].kind == "intraday").sum())},
-    "rows": tier1, "tier2": tier2, "cross_pool": cross_pool,
+    "rows": tier1, "tier2": tier2, "sheets": sheets,
     "breadth": breadth, "sector_counts": dict(sector_counts),
     "all_fail_counts": {k: sum(1 for r in rows.values() if k in r["fails"]) for k in crit_names},
 }
