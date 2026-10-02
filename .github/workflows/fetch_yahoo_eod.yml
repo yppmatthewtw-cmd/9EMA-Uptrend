@@ -1,0 +1,71 @@
+name: Fetch Yahoo daily bars
+
+# Price source for the 9EMA-Uptrend scan. The research container cannot reach Yahoo
+# (egress proxy), so the runner pulls the daily bars for the scan universe
+# and commits them under data/yahoo; scripts/scan_9ema.py reads the newest file.
+on:
+  workflow_dispatch:
+    inputs:
+      start:
+        description: First trading day (YYYY-MM-DD)
+        required: true
+        default: "2025-12-26"
+      end:
+        description: Day after the last trading day wanted (YYYY-MM-DD, exclusive)
+        required: true
+      interval:
+        description: Bar interval; an intraday one (60m) is rolled up to daily rows, 1wk/1mo kept as is
+        required: false
+        default: "1d"
+      list:
+        description: Ticker list file (default the screener universe)
+        required: false
+        default: "data/yahoo/tickers.txt"
+      out:
+        description: Output file under data/yahoo (default derived from the dates and interval)
+        required: false
+        default: ""
+      resample:
+        description: Resample daily bars on the runner (pandas rule, e.g. ME for month-end rows); empty keeps them daily
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  bars:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --quiet "yfinance>=0.2.50" pandas
+      - name: Download daily bars
+        env:
+          START: ${{ inputs.start }}
+          END: ${{ inputs.end }}
+          INTERVAL: ${{ inputs.interval }}
+          LIST: ${{ inputs.list }}
+          OUT: ${{ inputs.out }}
+          RESAMPLE: ${{ inputs.resample }}
+        run: python3 scripts/fetch_yahoo.py
+      - name: Commit bars
+        env:
+          START: ${{ inputs.start }}
+          END: ${{ inputs.end }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/yahoo
+          git commit -m "data: Yahoo daily bars $START -> $END" || { echo "nothing to commit"; exit 0; }
+          # The branch may have moved while the fetch ran, and it can move again
+          # between the pull and the push, so retry the pair rather than the pull
+          # alone: a lost race here throws away the whole fetch.
+          for i in 1 2 3 4 5; do
+            git pull --rebase --quiet origin "${GITHUB_REF_NAME}" && git push && exit 0
+            echo "push attempt $i lost a race; retrying in $((i * 5))s"
+            sleep $((i * 5))
+          done
+          echo "could not push after 5 attempts"; exit 1
