@@ -588,6 +588,13 @@ if SNAP and os.path.exists(SNAP):
     h_close, m_close = match("close"); h_prev, m_prev = match("prev")
     which = ("close", LAST, m_close) if m_close >= m_prev else ("prev", "前一交易日", m_prev)
     put(wd, rd_, 1, "Nasdaq 快照 vs Yahoo", font=H2, border=False); rd_ += 1
+    if max(m_close, m_prev) < 0.9:
+        put(wd, rd_, 1, os.path.basename(SNAP), font=BOLD)
+        put(wd, rd_, 2, (f"快照「最後成交價」同名單嘅 Yahoo {LAST} 收市只有 {m_close:.0%} 吻合（0.5% 內）、同前一交易日 {m_prev:.0%} —— 快照係更早嘅收市（10MA-watchlist 冇新快照），"
+                         f"今版只用佢嘅名稱、板塊、行業、市值，唔用嚟核對價格；Yahoo 日線係單一價格來源。"), align=WRAP)
+        wd.row_dimensions[rd_].height = 30; rd_ += 1
+        SNAP = ""
+if SNAP and os.path.exists(SNAP):
     put(wd, rd_, 1, os.path.basename(SNAP), font=BOLD)
     put(wd, rd_, 2, (f"快照「最後成交價」同名單 {len(ALL)} 隻嘅 Yahoo {LAST} 收市吻合（0.5% 內）{m_close:.1%}，同前一交易日收市吻合 {m_prev:.1%} "
                      f"→ 快照入面係{'當日' if which[0]=='close' else '前一日（Nasdaq API 到美東早上五點都仲未轉日，自動重新標籤）'}收市，當{which[1]}收市用"), align=WRAP)
